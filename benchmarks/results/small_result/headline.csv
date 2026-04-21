@@ -1,0 +1,6 @@
+version,description,wall_time_s,per_backtest_ms,speedup_vs_v1,projected
+v1_baseline,"Pure Python, projected from 9-backtest calibration",2556.0078420000013,4733.347855555558,1.0,True
+v2_numpy,NumPy-vectorized,1068.4010459,1978.5204553703707,2.392367409044298,False
+v3_numba,Numba JIT + power iteration,158.88684230000013,294.2348931481484,16.086969852254402,False
+v4_multiproc_8w,v3 under 8-worker multiprocessing pool,50.11859249999998,92.81220833333329,50.99919440076061,False
+v5_gpu,GPU min_var + CPU max_sharpe (gpu_fraction=100%),71.69126780000033,132.76160703703766,35.652987043423295,False
