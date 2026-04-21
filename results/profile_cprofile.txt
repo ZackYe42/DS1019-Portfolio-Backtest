@@ -1,0 +1,86 @@
+================================================================================
+cProfile report: 4 configs x 5 bootstrap samples = 20 backtests
+================================================================================
+
+>>> TOP 30 FUNCTIONS BY CUMULATIVE TIME <<<
+
+         29567727 function calls (29567518 primitive calls) in 41.558 seconds
+
+   Ordered by: cumulative time
+   List reduced from 462 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.004    0.004   41.558   41.558 v1_baseline.py:49(run)
+       20    0.105    0.005   41.535    2.077 backtest.py:69(run_backtest)
+     1800    0.004    0.000   21.101    0.012 optimizer.py:252(min_variance)
+     1800    5.007    0.003   21.097    0.012 optimizer.py:98(min_variance_numpy)
+      600    0.002    0.000   19.338    0.032 optimizer.py:265(max_sharpe)
+      600   15.568    0.026   19.336    0.032 optimizer.py:183(max_sharpe_numpy)
+   900000    5.759    0.000   11.400    0.000 optimizer.py:41(project_simplex)
+     1800    4.559    0.003    4.603    0.003 _linalg.py:1265(eigvalsh)
+  3900062    1.279    0.000    3.647    0.000 fromnumeric.py:48(_wrapfunc)
+  3000000    1.470    0.000    3.555    0.000 fromnumeric.py:1221(argmax)
+   900000    0.417    0.000    1.978    0.000 fromnumeric.py:2838(cumsum)
+   901856    0.288    0.000    1.493    0.000 {method 'max' of 'numpy.ndarray' objects}
+   900000    0.518    0.000    1.455    0.000 fromnumeric.py:939(sort)
+   901856    0.209    0.000    1.205    0.000 _methods.py:39(_amax)
+   900000    1.064    0.000    1.064    0.000 {method 'cumsum' of 'numpy.ndarray' objects}
+   908928    1.055    0.000    1.055    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+     2400    0.009    0.000    0.973    0.000 estimators.py:183(estimate_cov)
+  3000000    0.971    0.000    0.971    0.000 {method 'argmax' of 'numpy.ndarray' objects}
+     1200    0.537    0.000    0.651    0.001 estimators.py:55(ledoit_wolf)
+   900040    0.577    0.000    0.577    0.000 {method 'sort' of 'numpy.ndarray' objects}
+   900640    0.495    0.000    0.495    0.000 {built-in method numpy.arange}
+  3902290    0.334    0.000    0.334    0.000 {built-in method builtins.getattr}
+   900609    0.280    0.000    0.280    0.000 {method 'copy' of 'numpy.ndarray' objects}
+  3000000    0.198    0.000    0.198    0.000 fromnumeric.py:1217(_argmax_dispatcher)
+      600    0.004    0.000    0.172    0.000 estimators.py:23(sample_cov)
+      600    0.123    0.000    0.168    0.000 _function_base_impl.py:2674(cov)
+      600    0.131    0.000    0.139    0.000 estimators.py:120(ewma_cov)
+   900000    0.084    0.000    0.084    0.000 multiarray.py:403(where)
+   900000    0.082    0.000    0.082    0.000 fromnumeric.py:2834(_cumsum_dispatcher)
+   905316    0.082    0.000    0.082    0.000 {built-in method numpy.asanyarray}
+
+
+
+
+>>> TOP 30 FUNCTIONS BY INTERNAL TIME (excl. callees) <<<
+
+         29567727 function calls (29567518 primitive calls) in 41.558 seconds
+
+   Ordered by: internal time
+   List reduced from 462 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      600   15.568    0.026   19.336    0.032 optimizer.py:183(max_sharpe_numpy)
+   900000    5.759    0.000   11.400    0.000 optimizer.py:41(project_simplex)
+     1800    5.007    0.003   21.097    0.012 optimizer.py:98(min_variance_numpy)
+     1800    4.559    0.003    4.603    0.003 _linalg.py:1265(eigvalsh)
+  3000000    1.470    0.000    3.555    0.000 fromnumeric.py:1221(argmax)
+  3900062    1.279    0.000    3.647    0.000 fromnumeric.py:48(_wrapfunc)
+   900000    1.064    0.000    1.064    0.000 {method 'cumsum' of 'numpy.ndarray' objects}
+   908928    1.055    0.000    1.055    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+  3000000    0.971    0.000    0.971    0.000 {method 'argmax' of 'numpy.ndarray' objects}
+   900040    0.577    0.000    0.577    0.000 {method 'sort' of 'numpy.ndarray' objects}
+     1200    0.537    0.000    0.651    0.001 estimators.py:55(ledoit_wolf)
+   900000    0.518    0.000    1.455    0.000 fromnumeric.py:939(sort)
+   900640    0.495    0.000    0.495    0.000 {built-in method numpy.arange}
+   900000    0.417    0.000    1.978    0.000 fromnumeric.py:2838(cumsum)
+  3902290    0.334    0.000    0.334    0.000 {built-in method builtins.getattr}
+   901856    0.288    0.000    1.493    0.000 {method 'max' of 'numpy.ndarray' objects}
+   900609    0.280    0.000    0.280    0.000 {method 'copy' of 'numpy.ndarray' objects}
+   901856    0.209    0.000    1.205    0.000 _methods.py:39(_amax)
+  3000000    0.198    0.000    0.198    0.000 fromnumeric.py:1217(_argmax_dispatcher)
+      600    0.131    0.000    0.139    0.000 estimators.py:120(ewma_cov)
+      600    0.123    0.000    0.168    0.000 _function_base_impl.py:2674(cov)
+       20    0.105    0.005   41.535    2.077 backtest.py:69(run_backtest)
+   900000    0.084    0.000    0.084    0.000 multiarray.py:403(where)
+   900000    0.082    0.000    0.082    0.000 fromnumeric.py:2834(_cumsum_dispatcher)
+   905316    0.082    0.000    0.082    0.000 {built-in method numpy.asanyarray}
+   900000    0.081    0.000    0.081    0.000 fromnumeric.py:935(_sort_dispatcher)
+     3600    0.028    0.000    0.047    0.000 _twodim_base_impl.py:176(eye)
+     2400    0.025    0.000    0.057    0.000 optimizer.py:35(_ensure_psd)
+     2440    0.021    0.000    0.071    0.000 _methods.py:115(_mean)
+     3640    0.018    0.000    0.018    0.000 {built-in method numpy.zeros}
+
+

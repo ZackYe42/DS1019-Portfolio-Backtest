@@ -1,0 +1,483 @@
+Timer unit: 0.001 s
+
+Total time: 41.5081 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\backtest.py
+Function: run_backtest at line 69
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    69                                           def run_backtest(
+    70                                               returns: np.ndarray,
+    71                                               config: BacktestConfig,
+    72                                           ) -> BacktestResult:
+    73                                               """
+    74                                               Run one backtest and return a BacktestResult.
+    75                                           
+    76                                               Parameters
+    77                                               ----------
+    78                                               returns : np.ndarray, shape (T, N)
+    79                                                   Log returns.  The first `config.lookback` days are used as burn-in
+    80                                                   (the portfolio does not trade until we have a full lookback window).
+    81                                               config : BacktestConfig
+    82                                           
+    83                                               Returns
+    84                                               -------
+    85                                               BacktestResult
+    86                                                   Contains the daily portfolio return series and summary metrics.
+    87                                               """
+    88        20          0.0      0.0      0.0      T, N = returns.shape
+    89        20          0.0      0.0      0.0      lb = config.lookback
+    90        20          0.0      0.0      0.0      rb = config.rebalance_every
+    91                                           
+    92        20          0.0      0.0      0.0      if lb >= T:
+    93                                                   raise ValueError(f"lookback {lb} >= T {T}; no data to trade on")
+    94        20          0.0      0.0      0.0      if rb < 1:
+    95                                                   raise ValueError(f"rebalance_every must be >= 1, got {rb}")
+    96                                           
+    97                                               # Convert log returns to arithmetic returns for portfolio compounding.
+    98                                               # w @ arithmetic_returns is the portfolio's arithmetic return for that day.
+    99        20         28.0      1.4      0.1      arith_returns = np.exp(returns) - 1.0
+   100                                           
+   101                                               # Rebalance at days lb, lb+rb, lb+2*rb, ...
+   102        20          0.1      0.0      0.0      rebalance_indices = np.arange(lb, T, rb)
+   103        20          0.0      0.0      0.0      n_rebalance = len(rebalance_indices)
+   104                                           
+   105                                               # Initial weights: equal-weighted.  Will be overwritten at first rebalance.
+   106        20          0.2      0.0      0.0      weights = np.full(N, 1.0 / N)
+   107        20          0.2      0.0      0.0      weights_history = np.zeros((n_rebalance, N))
+   108                                           
+   109                                               # Portfolio return series: length T - lb, starting from day lb onward
+   110        20          0.0      0.0      0.0      port_returns = np.zeros(T - lb)
+   111                                           
+   112        20          0.0      0.0      0.0      rb_ptr = 0
+   113     50300          4.5      0.0      0.0      for t in range(lb, T):
+   114                                                   # Did we hit a rebalance date?  Solve a new weight vector.
+   115     50280         13.3      0.0      0.0          if rb_ptr < n_rebalance and t == rebalance_indices[rb_ptr]:
+   116      2400          1.9      0.0      0.0              window = returns[t - lb : t]                  # (lb, N) of past returns
+   117      2400        877.7      0.4      2.1              cov = estimate_cov(window, method=config.estimator)
+   118                                           
+   119      2400          2.1      0.0      0.0              if config.objective == "min_variance":
+   120      3600      17222.0      4.8     41.5                  weights = min_variance(cov, method="numpy",
+   121      1800          0.4      0.0      0.0                                         long_only=config.long_only)
+   122       600          0.1      0.0      0.0              elif config.objective == "max_sharpe":
+   123       600         14.5      0.0      0.0                  mu = window.mean(axis=0)                   # historical mean proxy
+   124      1200      23287.8     19.4     56.1                  weights = max_sharpe(cov, mu, rf=0.0, method="numpy",
+   125       600          0.1      0.0      0.0                                       long_only=config.long_only)
+   126                                                       else:
+   127                                                           raise ValueError(f"unknown objective '{config.objective}'")
+   128                                           
+   129      2400          3.2      0.0      0.0              weights_history[rb_ptr] = weights
+   130      2400          0.7      0.0      0.0              rb_ptr += 1
+   131                                           
+   132                                                   # Day t's portfolio return is weights dotted with today's asset returns
+   133     50280         48.5      0.0      0.1          port_returns[t - lb] = weights @ arith_returns[t]
+   134                                           
+   135                                               # Compute summary metrics
+   136        40          2.5      0.1      0.0      metrics = metric_summary(
+   137        20          0.0      0.0      0.0          port_returns,
+   138        20          0.0      0.0      0.0          rf_annual=config.rf_annual,
+   139        20          0.0      0.0      0.0          log_returns=False,
+   140                                               )
+   141                                           
+   142        40          0.1      0.0      0.0      return BacktestResult(
+   143        20          0.0      0.0      0.0          config=config,
+   144        20          0.0      0.0      0.0          portfolio_returns=port_returns,
+   145        20          0.0      0.0      0.0          weights_history=weights_history,
+   146        20          0.0      0.0      0.0          rebalance_indices=rebalance_indices,
+   147        20          0.0      0.0      0.0          metrics=metrics,
+   148                                               )
+
+Total time: 0.565627 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\estimators.py
+Function: ledoit_wolf at line 55
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    55                                           def ledoit_wolf(returns: np.ndarray) -> np.ndarray:
+    56                                               """
+    57                                               Ledoit-Wolf linear shrinkage estimator toward the scaled-identity target.
+    58                                           
+    59                                               Returns
+    60                                                   Sigma_hat = (1 - alpha) * S + alpha * mu * I
+    61                                               where
+    62                                                   S    = sample covariance
+    63                                                   mu   = trace(S) / N  (average variance)
+    64                                                   I    = identity matrix of size N
+    65                                                   alpha = optimal shrinkage intensity in [0, 1], computed from data
+    66                                           
+    67                                               Reference: Ledoit & Wolf (2004), "A well-conditioned estimator for
+    68                                               large-dimensional covariance matrices."
+    69                                           
+    70                                               Parameters
+    71                                               ----------
+    72                                               returns : np.ndarray, shape (T, N)
+    73                                           
+    74                                               Returns
+    75                                               -------
+    76                                               np.ndarray, shape (N, N)
+    77                                                   Shrinkage covariance estimate.
+    78                                               """
+    79      1200          0.9      0.0      0.2      if returns.ndim != 2:
+    80                                                   raise ValueError(f"returns must be 2D, got shape {returns.shape}")
+    81      1200          1.0      0.0      0.2      T, N = returns.shape
+    82      1200          0.2      0.0      0.0      if T < 2:
+    83                                                   raise ValueError(f"need at least 2 observations, got T={T}")
+    84                                           
+    85                                               # Center the returns
+    86      1200         62.4      0.1     11.0      X = returns - returns.mean(axis=0, keepdims=True)
+    87                                           
+    88                                               # Sample covariance with divisor T (not T-1) to match Ledoit-Wolf formulas
+    89      1200        238.2      0.2     42.1      S = (X.T @ X) / T
+    90                                           
+    91                                               # Shrinkage target: scaled identity with mu = tr(S)/N
+    92      1200         18.2      0.0      3.2      mu = np.trace(S) / N
+    93      1200         21.0      0.0      3.7      F = mu * np.eye(N)
+    94                                           
+    95                                               # Compute optimal shrinkage intensity (see Ledoit-Wolf 2004, eq. 14)
+    96                                               #   pi_hat: sum of asymptotic variances of entries of S
+    97                                               #   gamma_hat: squared Frobenius distance between S and target
+    98                                               #   alpha   = pi_hat / (gamma_hat * T), clipped to [0, 1]
+    99      1200         14.0      0.0      2.5      X2 = X ** 2
+   100      1200        158.4      0.1     28.0      pi_mat = (X2.T @ X2) / T - S ** 2
+   101      1200         11.1      0.0      2.0      pi_hat = pi_mat.sum()
+   102                                           
+   103      1200         26.0      0.0      4.6      gamma_hat = np.sum((S - F) ** 2)
+   104                                           
+   105                                               # Kappa estimate (shrinkage intensity, before clipping and /T)
+   106      1200          0.6      0.0      0.1      if gamma_hat < 1e-12:
+   107                                                   # Degenerate case: S already equals target, no shrinkage needed
+   108                                                   alpha = 0.0
+   109                                               else:
+   110      1200          0.4      0.0      0.1          kappa = pi_hat / gamma_hat
+   111      1200          2.3      0.0      0.4          alpha = max(0.0, min(1.0, kappa / T))
+   112                                           
+   113      1200         11.1      0.0      2.0      return (1.0 - alpha) * S + alpha * F
+
+Total time: 0.161697 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\estimators.py
+Function: sample_cov at line 23
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    23                                           def sample_cov(returns: np.ndarray) -> np.ndarray:
+    24                                               """
+    25                                               Classical sample covariance matrix.
+    26                                           
+    27                                               Given T observations of N asset returns, returns the (N, N) covariance
+    28                                               matrix estimated as
+    29                                                   S = (1 / (T - 1)) * (R - mean)^T (R - mean)
+    30                                           
+    31                                               Parameters
+    32                                               ----------
+    33                                               returns : np.ndarray, shape (T, N)
+    34                                                   Log returns.  Each row is one time step, each column is one asset.
+    35                                           
+    36                                               Returns
+    37                                               -------
+    38                                               np.ndarray, shape (N, N)
+    39                                                   Sample covariance matrix.
+    40                                               """
+    41       600          0.4      0.0      0.3      if returns.ndim != 2:
+    42                                                   raise ValueError(f"returns must be 2D, got shape {returns.shape}")
+    43       600          0.4      0.0      0.2      T, N = returns.shape
+    44       600          0.1      0.0      0.1      if T < 2:
+    45                                                   raise ValueError(f"need at least 2 observations, got T={T}")
+    46                                           
+    47                                               # np.cov with rowvar=False treats columns as variables (what we want)
+    48       600        160.7      0.3     99.4      return np.cov(returns, rowvar=False, ddof=1)
+
+Total time: 0.132198 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\estimators.py
+Function: ewma_cov at line 120
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   120                                           def ewma_cov(returns: np.ndarray, lam: float = 0.94) -> np.ndarray:
+   121                                               """
+   122                                               Exponentially-weighted covariance (RiskMetrics convention).
+   123                                           
+   124                                               Weights decay geometrically: observation at lag k receives weight
+   125                                               proportional to lam^k.  Default lam=0.94 matches J.P. Morgan's
+   126                                               RiskMetrics technical document for daily data.
+   127                                           
+   128                                               Formally,
+   129                                                   Sigma = sum_{k=0}^{T-1} w_k (r_{T-k} - r_bar) (r_{T-k} - r_bar)^T
+   130                                               with
+   131                                                   w_k = (1 - lam) * lam^k   (normalized so sum_k w_k = 1 - lam^T)
+   132                                           
+   133                                               For stability we normalize the final weights so they sum to exactly 1.
+   134                                           
+   135                                               Parameters
+   136                                               ----------
+   137                                               returns : np.ndarray, shape (T, N)
+   138                                               lam : float, in (0, 1)
+   139                                                   Decay factor.  Higher values put more weight on the distant past.
+   140                                           
+   141                                               Returns
+   142                                               -------
+   143                                               np.ndarray, shape (N, N)
+   144                                                   Exponentially-weighted covariance.
+   145                                               """
+   146       600          0.4      0.0      0.3      if returns.ndim != 2:
+   147                                                   raise ValueError(f"returns must be 2D, got shape {returns.shape}")
+   148       600          0.3      0.0      0.2      if not (0.0 < lam < 1.0):
+   149                                                   raise ValueError(f"lam must be in (0, 1), got {lam}")
+   150       600          0.4      0.0      0.3      T, N = returns.shape
+   151       600          0.1      0.0      0.1      if T < 2:
+   152                                                   raise ValueError(f"need at least 2 observations, got T={T}")
+   153                                           
+   154                                               # Weights: most recent observation has index T-1 and gets the largest weight.
+   155                                               # w_k = (1 - lam) * lam^k for k = 0, 1, ..., T-1 (k measures lag from present)
+   156       600          1.1      0.0      0.9      k = np.arange(T - 1, -1, -1, dtype=np.float64)  # lags: T-1, T-2, ..., 1, 0
+   157       600          3.4      0.0      2.6      weights = (1.0 - lam) * (lam ** k)
+   158       600          2.5      0.0      1.9      weights /= weights.sum()  # renormalize so weights sum to 1
+   159                                           
+   160                                               # Weighted mean
+   161       600         17.6      0.0     13.3      mu = (weights[:, None] * returns).sum(axis=0, keepdims=True)
+   162                                           
+   163                                               # Weighted centered returns
+   164       600          5.6      0.0      4.3      X = returns - mu
+   165                                           
+   166                                               # Cov = X^T diag(w) X
+   167                                               # Efficient form: (X * sqrt(w))^T (X * sqrt(w))
+   168       600         10.2      0.0      7.7      Xw = X * np.sqrt(weights)[:, None]
+   169       600         90.6      0.2     68.5      return Xw.T @ Xw
+
+Total time: 17.0519 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\optimizer.py
+Function: min_variance_numpy at line 98
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    98                                           def min_variance_numpy(
+    99                                               cov: np.ndarray,
+   100                                               long_only: bool = True,
+   101                                               n_iter: int = 500,
+   102                                               step_size: float | None = None,
+   103                                           ) -> np.ndarray:
+   104                                               """
+   105                                               Projected-gradient minimum-variance solver.
+   106                                           
+   107                                               We minimize f(w) = w^T Sigma w.  Gradient is 2 Sigma w.  Each iteration:
+   108                                                   1. w <- w - step * gradient
+   109                                                   2. w <- project_simplex(w)    (if long_only)
+   110                                           
+   111                                               step_size defaults to 1 / (2 * lambda_max(Sigma)) for guaranteed
+   112                                               convergence.  Fixed iteration count => fixed amount of work => easy
+   113                                               to compile with Numba and vectorize on GPU.
+   114                                           
+   115                                               For long_only=False, the problem has a closed form:
+   116                                                   w* = Sigma^{-1} 1 / (1^T Sigma^{-1} 1)
+   117                                               which we use directly (no iteration).
+   118                                               """
+   119      1800          1.6      0.0      0.0      N = cov.shape[0]
+   120      1800         37.0      0.0      0.2      Sigma = _ensure_psd(cov)
+   121                                           
+   122      1800          0.3      0.0      0.0      if not long_only:
+   123                                                   # Closed-form unconstrained (except sum=1) solution
+   124                                                   ones = np.ones(N)
+   125                                                   x = np.linalg.solve(Sigma, ones)
+   126                                                   return x / x.sum()
+   127                                           
+   128                                               # Choose step size based on largest eigenvalue of Sigma
+   129      1800          0.3      0.0      0.0      if step_size is None:
+   130      1800       3782.8      2.1     22.2          lam_max = np.linalg.eigvalsh(Sigma).max()
+   131      1800          1.8      0.0      0.0          step_size = 1.0 / (2.0 * lam_max)
+   132                                           
+   133                                               # Initialize at equal weights
+   134      1800         13.3      0.0      0.1      w = np.full(N, 1.0 / N)
+   135                                           
+   136    901800         89.2      0.0      0.5      for _ in range(n_iter):
+   137    900000       3042.9      0.0     17.8          grad = 2.0 * Sigma @ w
+   138    900000      10082.6      0.0     59.1          w = project_simplex(w - step_size * grad)
+   139                                           
+   140      1800          0.2      0.0      0.0      return w
+
+Total time: 21.8146 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\optimizer.py
+Function: max_sharpe_numpy at line 183
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   183                                           def max_sharpe_numpy(
+   184                                               cov: np.ndarray,
+   185                                               mu: np.ndarray,
+   186                                               rf: float = 0.0,
+   187                                               long_only: bool = True,
+   188                                               n_iter: int = 5000,
+   189                                           ) -> np.ndarray:
+   190                                               """
+   191                                               Frank-Wolfe maximum-Sharpe solver.
+   192                                           
+   193                                               The long-only max-Sharpe portfolio lives on the probability simplex
+   194                                               { w : sum(w) = 1, w >= 0 }.  Frank-Wolfe is a beautifully simple
+   195                                               algorithm for convex problems on a simplex:
+   196                                           
+   197                                                   repeat:
+   198                                                       1. compute gradient of Sharpe at current w
+   199                                                       2. find the corner (single asset) with max gradient component
+   200                                                       3. move a fraction gamma = 2/(k+2) toward that corner
+   201                                           
+   202                                               Each iteration does ONE matrix-vector product, one argmax, and a
+   203                                               convex combination.  There is no step-size to tune, no projection
+   204                                               to compute, and the iterate stays on the simplex by construction.
+   205                                               This structure makes the algorithm trivial to compile with Numba
+   206                                               and trivial to vectorize on GPU (we can batch thousands of these
+   207                                               solvers running in parallel on different covariance matrices).
+   208                                           
+   209                                               For long_only=False, the unconstrained tangency portfolio has a
+   210                                               closed form:
+   211                                                   y* = Sigma^{-1} (mu - rf)
+   212                                                   w* = y* / sum(y*)
+   213                                               """
+   214       600          0.3      0.0      0.0      N = cov.shape[0]
+   215       600         10.7      0.0      0.0      Sigma = _ensure_psd(cov)
+   216       600          0.6      0.0      0.0      excess = mu - rf
+   217                                           
+   218       600          4.3      0.0      0.0      if long_only and (excess <= 0).all():
+   219                                                   raise ValueError("max_sharpe: no asset has positive excess return (long-only)")
+   220                                           
+   221       600          0.1      0.0      0.0      if not long_only:
+   222                                                   y = np.linalg.solve(Sigma, excess)
+   223                                                   return y / y.sum()
+   224                                           
+   225                                               # Frank-Wolfe on the simplex, starting from equal weights
+   226       600          3.4      0.0      0.0      w = np.ones(N) / N
+   227   3000600        250.5      0.0      1.1      for k in range(n_iter):
+   228   3000000       4475.2      0.0     20.5          Sw = Sigma @ w
+   229   3000000       1991.1      0.0      9.1          port_var = w @ Sw
+   230   3000000        739.4      0.0      3.4          port_vol = np.sqrt(port_var)
+   231   3000000       1970.8      0.0      9.0          port_ret = excess @ w
+   232                                           
+   233                                                   # Gradient of Sharpe(w) = (mu^T w) / sqrt(w^T Sigma w)
+   234   3000000       3913.6      0.0     17.9          grad = excess / port_vol - (port_ret / (port_vol ** 3)) * Sw
+   235                                           
+   236                                                   # The best "atom" on the simplex is the standard basis vector e_i
+   237                                                   # where i = argmax(grad)
+   238   3000000       5659.5      0.0     25.9          best = int(np.argmax(grad))
+   239                                           
+   240                                                   # Frank-Wolfe step: w <- (1 - gamma) * w + gamma * e_best
+   241   3000000        443.6      0.0      2.0          gamma = 2.0 / (k + 2.0)
+   242   3000000       1557.7      0.0      7.1          w *= 1.0 - gamma
+   243   3000000        793.7      0.0      3.6          w[best] += gamma
+   244                                           
+   245       600          0.1      0.0      0.0      return w
+
+Total time: 41.539 s
+File: D:\OneDrive - UBC\Desktop\DS-GA 1019\Project\portfolio_backtest\src\versions\v1_baseline.py
+Function: run at line 49
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    49                                           def run(
+    50                                               returns: np.ndarray,
+    51                                               configs: Sequence[BacktestConfig],
+    52                                               n_bootstrap: int = 50,
+    53                                               block_size: int = 20,
+    54                                               seed: int = 0,
+    55                                               show_progress: bool = True,
+    56                                           ) -> BootstrapResult:
+    57                                               """
+    58                                               Run the full bootstrap-backtest workload.
+    59                                           
+    60                                               For each config and each bootstrap resample, run a backtest and record
+    61                                               its metrics.  Return an aggregated DataFrame.
+    62                                           
+    63                                               This is the naive baseline: a pure Python double loop over configs and
+    64                                               bootstrap samples, with each backtest computed serially.
+    65                                           
+    66                                               Parameters
+    67                                               ----------
+    68                                               returns : np.ndarray, shape (T, N)
+    69                                                   Log returns.
+    70                                               configs : Sequence[BacktestConfig]
+    71                                                   List of configs to evaluate.
+    72                                               n_bootstrap : int
+    73                                                   Number of bootstrap resamples per config.
+    74                                               block_size : int
+    75                                                   Block size for the fixed-block bootstrap.
+    76                                               seed : int
+    77                                                   Base seed.  Each (config, bootstrap) pair uses a derived sub-seed
+    78                                                   so the full run is reproducible.
+    79                                               show_progress : bool
+    80                                                   Whether to show a tqdm progress bar.
+    81                                           
+    82                                               Returns
+    83                                               -------
+    84                                               BootstrapResult
+    85                                               """
+    86         1          0.0      0.0      0.0      import time
+    87                                           
+    88         1          0.0      0.0      0.0      t0 = time.perf_counter()
+    89                                           
+    90         1          0.0      0.0      0.0      n_configs = len(configs)
+    91         1          0.0      0.0      0.0      total_iters = n_configs * n_bootstrap
+    92                                           
+    93                                               # Collect raw per-(config, sample) metrics
+    94         1          0.0      0.0      0.0      raw_rows = []
+    95                                           
+    96         1          0.0      0.0      0.0      iterator = range(total_iters)
+    97         1          0.0      0.0      0.0      if show_progress:
+    98                                                   iterator = tqdm(iterator, desc="v1 baseline", unit="bt")
+    99                                           
+   100        21          0.0      0.0      0.0      for idx in iterator:
+   101        20          0.0      0.0      0.0          cfg_idx = idx // n_bootstrap
+   102        20          0.0      0.0      0.0          boot_idx = idx % n_bootstrap
+   103        20          0.0      0.0      0.0          cfg = configs[cfg_idx]
+   104                                           
+   105                                                   # Derived seed so each (config, bootstrap) pair is reproducible
+   106        20          0.0      0.0      0.0          sub_seed = seed * 1_000_003 + cfg_idx * 997 + boot_idx
+   107        20          1.2      0.1      0.0          rng = np.random.default_rng(sub_seed)
+   108                                           
+   109                                                   # Generate one bootstrap resample of the returns
+   110        20         11.6      0.6      0.0          boot_returns = fixed_block_bootstrap(returns, block_size=block_size, rng=rng)
+   111                                           
+   112                                                   # Run a full backtest on the resampled returns
+   113        20      41519.2   2076.0    100.0          result = run_backtest(boot_returns, cfg)
+   114                                           
+   115                                                   # Record: config label + bootstrap index + metrics
+   116        20          0.0      0.0      0.0          row = {
+   117        20          0.0      0.0      0.0              "config_idx": cfg_idx,
+   118        20          0.0      0.0      0.0              "bootstrap_idx": boot_idx,
+   119        20          0.0      0.0      0.0              "estimator": cfg.estimator,
+   120        20          0.0      0.0      0.0              "objective": cfg.objective,
+   121        20          0.0      0.0      0.0              "lookback": cfg.lookback,
+   122        20          0.0      0.0      0.0              "rebalance_every": cfg.rebalance_every,
+   123        20          0.1      0.0      0.0              "label": cfg.label(),
+   124                                                   }
+   125        20          0.0      0.0      0.0          row.update(result.metrics)
+   126        20          0.0      0.0      0.0          raw_rows.append(row)
+   127                                           
+   128         1          0.0      0.0      0.0      wall_time = time.perf_counter() - t0
+   129                                           
+   130                                               # Build DataFrames
+   131         1          0.9      0.9      0.0      raw_df = pd.DataFrame(raw_rows)
+   132                                           
+   133                                               # Per-config summary: mean + 5%/95% quantiles across bootstrap samples
+   134         1          0.0      0.0      0.0      metric_cols = ["sharpe", "annual_vol", "annual_return", "max_drawdown", "cagr"]
+   135         1          0.0      0.0      0.0      agg_rows = []
+   136         5          0.0      0.0      0.0      for cfg_idx, cfg in enumerate(configs):
+   137         4          1.8      0.5      0.0          sub = raw_df[raw_df["config_idx"] == cfg_idx]
+   138         4          0.0      0.0      0.0          row = {
+   139         4          0.0      0.0      0.0              "config_idx": cfg_idx,
+   140         4          0.0      0.0      0.0              "estimator": cfg.estimator,
+   141         4          0.0      0.0      0.0              "objective": cfg.objective,
+   142         4          0.0      0.0      0.0              "lookback": cfg.lookback,
+   143         4          0.0      0.0      0.0              "rebalance_every": cfg.rebalance_every,
+   144         4          0.0      0.0      0.0              "label": cfg.label(),
+   145                                                   }
+   146        24          0.0      0.0      0.0          for m in metric_cols:
+   147        20          0.8      0.0      0.0              vals = sub[m].to_numpy()
+   148        20          0.4      0.0      0.0              row[f"{m}_mean"] = float(np.nanmean(vals))
+   149        20          1.2      0.1      0.0              row[f"{m}_p05"] = float(np.nanquantile(vals, 0.05))
+   150        20          1.0      0.1      0.0              row[f"{m}_p95"] = float(np.nanquantile(vals, 0.95))
+   151         4          0.0      0.0      0.0          agg_rows.append(row)
+   152                                           
+   153         1          0.6      0.6      0.0      agg_df = pd.DataFrame(agg_rows)
+   154                                           
+   155         2          0.0      0.0      0.0      return BootstrapResult(
+   156         1          0.0      0.0      0.0          metrics_per_config=agg_df,
+   157         1          0.0      0.0      0.0          raw_metrics=raw_df,
+   158         1          0.0      0.0      0.0          wall_time=wall_time,
+   159                                               )
+
